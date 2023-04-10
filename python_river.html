@@ -114,12 +114,12 @@ const INITIAL_SEEDS = rivers;
 let seedInput = document.getElementById("seed");
 let seedSelect = document.getElementById("seedSelect");
 
-let seeds = JSON.parse(localStorage.getItem("seeds")) || INITIAL_SEEDS;
-let scores = JSON.parse(localStorage.getItem("scores")) || {};
+let seeds = JSON.parse(localStorage.getItem("pr_seeds")) || INITIAL_SEEDS;
+let scores = JSON.parse(localStorage.getItem("pr_scores")) || {};
 
 updateSeedSelect();
 
-let savedSeed = localStorage.getItem("lastplayedseed")
+let savedSeed = localStorage.getItem("pr_lastplayedseed")
 if (savedSeed) {
     seedInput.value = savedSeed;
     seedSelect.value = savedSeed;
@@ -157,7 +157,7 @@ seedInput.addEventListener("change", function() {
 
 function saveGame() {
     let seed = seedInput.value;
-		localStorage.setItem("lastplayedseed", seedInput.value);
+		localStorage.setItem("pr_lastplayedseed", seedInput.value);
 		
     let index = seeds.indexOf(seed);
     if (index !== -1) {
@@ -167,12 +167,12 @@ function saveGame() {
     /*if (seeds.length > MAX_SEEDS) {
         seeds.pop();
     }*/
-    localStorage.setItem("seeds", JSON.stringify(seeds));
+    localStorage.setItem("pr_seeds", JSON.stringify(seeds));
     updateSeedSelect();
 		
     if (!scores[seed] || score < scores[seed]) {
         scores[seed] = score;
-        localStorage.setItem("scores", JSON.stringify(scores));
+        localStorage.setItem("pr_scores", JSON.stringify(scores));
         updateSeedSelect();
 				seedSelect.value = seedInput.value;
     }
@@ -189,8 +189,8 @@ removeButton.addEventListener("click", function() {
     // Remove the seed from the scores object
     delete scores[seedToRemove];
     // Update localStorage
-    localStorage.setItem("seeds", JSON.stringify(seeds));
-    localStorage.setItem("scores", JSON.stringify(scores));
+    localStorage.setItem("pr_seeds", JSON.stringify(seeds));
+    localStorage.setItem("pr_scores", JSON.stringify(scores));
     // Update the seed select element
     updateSeedSelect();
   }
