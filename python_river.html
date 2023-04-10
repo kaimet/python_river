@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Python River</title>
+</head>
+
+<body style="background-image: url('img/bg.jpg')">
+
+<label for="seed">Seed:</label>
+<input type="text" id="seed" value="batik" style="font-family: monospace;">
+<select name="seeds" id="seedSelect" style="font-family: monospace;"></select>
+<button type="button" id="seedRemoveButton">Remove current seed</button>
+<button type="button" id="clearButton">Clear all to initial state</button>
+
+<div id="container" style="display: flex; justify-content: center;">
+<canvas id="gameCanvas" width="500" height="500" style="border:3px solid #444444;"></canvas>
+</div>
+
+<div id="scoreContainer" style="display: block; text-align: center;"></div>
+
+
+<script src="js/prng.js"></script>
+
+
+<script src="js/path2D-inspection.min.js"></script>
+<script>
+// a really quick hack to grasp 'intersect' from their esm
+globalThis.module = {};
+</script>
+<script src="js/intersect.js"></script>
+<script>
+// part 2 of the hack to grasp 'intersect', let's make it a Path2D method :P
+{
+  const intersect = module.exports;
+  delete globalThis.module;
+  Path2D.prototype.getIntersections = function(path2) {
+    return intersect(this.toSVGString(), path2.toSVGString());
+  };
+  Path2D.prototype.intersects = function(path2) {
+    return this.getIntersections(path2).length > 0;
+  };
+	
+	// source: https://stackoverflow.com/questions/68724996/javascript-canvas-intersection-between-two-path2d
+}
+</script>
+
+
+<script>  // ===================================================
+
+const playerRad = 5
+const playerSpeed = 2.5
+const turnForce = 0.002
+const pathLength = 20
+const turnRadius = 15
+const maxTurnAngle = Math.PI*2/3
+const segmentLength = 100
+const tailLength = 90
+
+
+// ===================================================
+
+/*
+let seedInput = document.getElementById("seed")
+let savedSeed = localStorage.getItem("seed")
+if (savedSeed) seedInput.value = savedSeed
+var seed = cyrb128(document.getElementById("seed").value)
+var rnd = mulberry32(seed[0])*/
+
+
+var scoreElement = document.createElement('div')
+scoreContainer.appendChild(scoreElement)
+scoreElement.style.fontSize = '32px'
+
+var fpsOut = document.createElement('div')
+document.body.appendChild(fpsOut)
+fpsOut.style.fontSize = '24px'
+
+var debugOut = document.createElement('div')
+document.body.appendChild(debugOut)
+debugOut.style.fontSize = '28px'
+
+var canvas = document.getElementById("gameCanvas")
+var ctx = canvas.getContext("2d")
+ctx.imageSmoothingEnabled = true
+//ctx.imageSmoothingQuality = 'high'
+
+
+var backgroundImage = new Image()
+backgroundImage.src = "img/background.jpg"
+var playerImage = new Image()
+playerImage.src = "img/player.png"
+var ghostImage = new Image()
+ghostImage.src = "img/ghost.png"
+var turnImage = new Image()
+turnImage.src = "img/turn.png"
+var curTurnImage = new Image()
+curTurnImage.src = "img/curturn.png"
+
+//var bounceSound = new Audio('sounds/bounceball.mp3')
+
+
+// ================
+//localStorage.clear();
+//localStorage.removeItem("seeds");
+
+const MAX_SEEDS = 500; // not used
+
+const rivers = [
+  "Nile", "Amazon", "Yangtze", "Mississippi", "Yenisei", "Parana", "Congo", "Dnipro", "Amur", "Lena", "Volga", "Mekong", "Mackenzie", "Niger", "Murray", "Euphrates", "Yukon", "Indus", "Danube", "Ganges", "Brahmaputra", "Colorado", "Orinoco", "Arkansas", "Paraguay", "Zambezi", 
+];
+
+const INITIAL_SEEDS = rivers;
+
+let seedInput = document.getElementById("seed");
+let seedSelect = document.getElementById("seedSelect");
+
+let seeds = JSON.parse(localStorage.getItem("seeds")) || INITIAL_SEEDS;
+let scores = JSON.parse(localStorage.getItem("scores")) || {};
+
+updateSeedSelect();
+
+let savedSeed = localStorage.getItem("lastplayedseed")
+if (savedSeed) {
+    seedInput.value = savedSeed;
+    seedSelect.value = savedSeed;
+}
+var seed = cyrb128(seedInput.value)
+var rnd = mulberry32(seed[0])
+
+
+// ===========
+
+
+function updateSeedSelect() {
+    seedSelect.innerHTML = "";
+    let maxLength = Math.max(...seeds.map(seed => seed.length));
+    for (let i = 0; i < seeds.length; i++) {
+        let seed = seeds[i];
+        let paddedSeed = seed.padEnd(maxLength, "\u00A0");
+        let score = scores[seed] || 0;
+        let seedOption = document.createElement("option");
+        seedOption.textContent = `${paddedSeed}   (your best score: ${score})`;
+        seedOption.value = seed;
+        seedSelect.appendChild(seedOption);
+    }
+}
+
+seedSelect.addEventListener("change", function() {
+    seedInput.value = seedSelect.value;
+    startNewTrack();
+});
+
+seedInput.addEventListener("change", function() {
+    startNewTrack();
+});
+
+
+function saveGame() {
+    let seed = seedInput.value;
+		localStorage.setItem("lastplayedseed", seedInput.value);
+		
+    let index = seeds.indexOf(seed);
+    if (index !== -1) {
+        seeds.splice(index, 1);
+    }
+    seeds.unshift(seed);
+    /*if (seeds.length > MAX_SEEDS) {
+        seeds.pop();
+    }*/
+    localStorage.setItem("seeds", JSON.stringify(seeds));
+    updateSeedSelect();
+		
+    if (!scores[seed] || score < scores[seed]) {
+        scores[seed] = score;
+        localStorage.setItem("scores", JSON.stringify(scores));
+        updateSeedSelect();
+				seedSelect.value = seedInput.value;
+    }
+}
+
+
+let removeButton = document.getElementById("seedRemoveButton");
+
+removeButton.addEventListener("click", function() {
+  let seedToRemove = seedSelect.value;
+  if (seedToRemove) {
+    // Remove the seed from the seeds array
+    seeds = seeds.filter(seed => seed !== seedToRemove);
+    // Remove the seed from the scores object
+    delete scores[seedToRemove];
+    // Update localStorage
+    localStorage.setItem("seeds", JSON.stringify(seeds));
+    localStorage.setItem("scores", JSON.stringify(scores));
+    // Update the seed select element
+    updateSeedSelect();
+  }
+});
+
+let clearButton = document.getElementById("clearButton");
+
+clearButton.addEventListener("click", function() {
+  localStorage.clear()
+	seeds = INITIAL_SEEDS
+	seedSelect.innerHTML = ""
+  updateSeedSelect()
+});
+
+// =============================================
+
+
+var keys = {};
+document.onkeydown = document.onkeyup = function(e) {
+	if (e.target.tagName === 'INPUT') return;
+	
+	keys[e.keyCode] = e.type == 'keydown'
+	//db(e.keyCode)
+	
+	// Pause on P
+	if (e.type == 'keydown' && (e.keyCode == 80)) {
+		pause = pause ? false : true
+	}
+	
+	// new game on Enter or Escape or Space
+	if (e.type == 'keydown' && (e.keyCode == 13 || e.keyCode == 27 || e.keyCode == 32)) {
+		startNewGame()
+	}
+	
+	// fps on `
+	if (e.keyCode == 192 && e.type == 'keydown') {
+		showFPS = !showFPS
+		if (!showFPS) fpsOut.innerHTML = ''
+	}
+};
+
+
+
+function db(v) {
+	debugOut.innerHTML = v;
+}
+
+const perf = (function() {
+  let c = 0
+  let t0, t1
+  return function() {
+    if (c++ % 2 == 0) {
+      t0 = performance.now()
+    } else {
+      t1 = performance.now()
+      const timeDiff = (t1 - t0).toFixed(2)
+			db(timeDiff)
+    }
+  }
+})()
+
+
+var frameTime = 0, lastLoop = new Date(), thisLoop
+function countFPS() {
+	const FPSfilterStrength = 20
+	var thisFrameTime = (thisLoop = new Date()) - lastLoop
+	frameTime += (thisFrameTime - frameTime) / FPSfilterStrength
+	lastLoop = thisLoop
+}
+
+setInterval(function(){
+	if (showFPS) {
+		fpsOut.innerHTML = (1000/frameTime).toFixed(1) + " fps"
+	}
+}, 1000);
+
+
+function updateScore() {
+	scoreElement.innerHTML = 'Length: ' + score
+}
+
+
+function clamp(number, min, max) {
+  return Math.max(min, Math.min(number, max));
+}
+
+// =================================================
+
+
+function drawBackground() {
+		//var pattern = ctx.createPattern(backgroundImage, 'repeat');
+    var startX = -player.x % backgroundImage.width - backgroundImage.width;
+    var startY = -player.y % backgroundImage.height - backgroundImage.height;
+    for (var x = startX; x < canvas.width + backgroundImage.width; x += backgroundImage.width) {
+        for (var y = startY; y < canvas.height + backgroundImage.height; y += backgroundImage.height) {
+            ctx.drawImage(backgroundImage, x, y);
+        }
+    }
+}
+
+
+// =================================================
+
+
+function Player(x, y) {
+	this.x = x
+	this.y = y
+	this.r = playerRad
+	this.orientation = -Math.PI/2
+	this.speed = playerSpeed
+	this.turnForce = 0;
+	this.vx
+	this.vy
+	this.setVelocities()
+	this.frame = 0;
+	this.iPos = 0;
+	
+} 
+
+Player.prototype.setVelocities = function() {
+	this.vx = this.speed * Math.cos(this.orientation)
+	this.vy = this.speed * Math.sin(this.orientation)
+}
+
+
+Player.prototype.update = function() {
+	if (keys[37]) {            // left arrow
+			if (this.turnForce > -0.1) this.turnForce -= turnForce
+	}
+	if (keys[39]) {            // right arrow
+			if (this.turnForce < 0.1) this.turnForce += turnForce
+	}
+	this.orientation += this.turnForce
+	
+	this.setVelocities()
+	
+	this.x += this.vx
+	this.y += this.vy
+	
+	if (this.frame++ % 3 == 0) {
+		trace.push({x: this.x, y: this.y, or: this.orientation});
+		this.iPos++
+		/*if (trace.length > 1500) {
+				trace.shift();
+		}*/
+	}
+	
+}
+
+
+
+Player.prototype.draw = function() {
+	ctx.save()
+	ctx.rotate(this.orientation - Math.PI / 2)
+	ctx.drawImage(playerImage, -this.r, -this.r*5, this.r * 2, this.r * 10)
+	ctx.restore()
+	this.drawArrows()
+}
+
+Player.prototype.drawArrows = function() {
+	if (keys[37]) { // left arrow
+    ctx.save();
+    ctx.rotate(this.orientation + Math.PI / 2);
+    ctx.beginPath();
+    ctx.fillStyle = 'yellow';
+    ctx.moveTo(-10, -10);
+    ctx.lineTo(-5, -15);
+    ctx.lineTo(-5, -5);
+    ctx.fill();
+    ctx.restore();
+		}
+
+	if (keys[39]) { // right arrow
+    ctx.save();
+    ctx.rotate(this.orientation + Math.PI / 2);
+    ctx.beginPath();
+    ctx.fillStyle = 'yellow';
+    ctx.moveTo(10, -10);
+    ctx.lineTo(5, -15);
+    ctx.lineTo(5, -5);
+    ctx.fill();
+    ctx.restore();
+	}
+}
+
+
+Player.prototype.drawTrace = function() {
+	ctx.beginPath()
+  ctx.lineWidth = 2
+  ctx.shadowColor = '#eeeeee'
+  ctx.shadowBlur = 5
+  ctx.shadowOffsetX = 2
+  ctx.shadowOffsetY = 2
+	
+	// best trace from this session
+	if (prevTrace.length > 0) {
+		ctx.strokeStyle = '#888888'
+		var i0 = clamp(trace.length - tailLength, 0, prevTrace.length-1)
+		ctx.moveTo(prevTrace[i0].x, prevTrace[i0].y)
+		for (var i = i0 + 1; i < trace.length && i < prevTrace.length; i++) {
+			ctx.lineTo(prevTrace[i].x, prevTrace[i].y)
+		}
+		ctx.stroke()
+	
+		ctx.save()
+		i--
+		ctx.translate(prevTrace[i].x, prevTrace[i].y)
+		ctx.rotate(prevTrace[i].or - Math.PI / 2)
+		ctx.globalAlpha = 0.7
+		ctx.drawImage(ghostImage, -player.r, -player.r*5, player.r * 2, player.r * 10)
+		ctx.restore()
+		ctx.globalAlpha = 1
+	}
+	
+	// current trace
+	ctx.beginPath()
+	tailCrossed = isTailCrossed()
+	ctx.strokeStyle = tailCrossed ? 'red' : 'blue'
+	i0 = Math.max(0, trace.length - tailLength)
+	ctx.moveTo(trace[i0].x, trace[i0].y)
+	for (var i = i0 + 1; i < trace.length; i++) { 
+		ctx.lineTo(trace[i].x, trace[i].y)
+	}
+	ctx.stroke()
+}
+
+// ==================================================
+
+
+function GeneratePath(turns, segmentLength, roughness) {
+    let path = [];
+    let currentX = 0;
+    let currentY = -segmentLength;
+    let currentAngle = -Math.PI / 2;
+    path.push({x: currentX, y: currentY, r: turnRadius});
+    for (let i = 0; i < turns; i++) {
+        let turnAngle;
+        if (rnd() < 0.5) {
+            turnAngle = (rnd() * roughness * 2 / 3) + roughness / 3;
+        } else {
+            turnAngle = -(rnd() * roughness * 2 / 3) - roughness / 3;
+        }
+        currentAngle += turnAngle;
+        currentX += segmentLength * Math.cos(currentAngle);
+        currentY += segmentLength * Math.sin(currentAngle);
+        path.push({x: currentX, y: currentY, r: 0});
+    }
+    return path;
+}
+
+
+function drawPath() {
+	if (prevTrace.length > 0) return
+	
+  let r = turnRadius;
+	ctx.lineWidth = 2;
+	ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+	draw3DLine(0, 0, path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) {
+    draw3DLine(path[i-1].x, path[i-1].y, path[i].x, path[i].y, 2);
+  }
+  ctx.stroke();
+}
+
+function draw3DLine(x1, y1, x2, y2, k) {
+  // Draw the left shadow line
+  ctx.strokeStyle = '#999999';
+  ctx.beginPath();
+  ctx.moveTo(x1 - k, y1 - k);
+  ctx.lineTo(x2 - k, y2 - k);
+  ctx.stroke();
+
+  // Draw the main line
+  ctx.strokeStyle = '#666666';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  // Draw the right highlight line
+  ctx.strokeStyle = '#cccccc';
+  ctx.beginPath();
+  ctx.moveTo(x1 + k, y1 + k);
+  ctx.lineTo(x2 + k, y2 + k);
+  ctx.stroke();
+}
+
+
+function drawTurns(){
+  ctx.shadowColor = '#333333';
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 3;
+	
+	let i = curTurn-1
+	let im = curTurnImage
+	if (i >= 0 && path[i].r > 0) {
+		var r = path[i].r -= 2
+		ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2)
+	}
+	
+  for (i=curTurn; i < curTurn+7 && i < path.length; i++) {
+    im = i == curTurn ? curTurnImage : turnImage;
+		var dt = i-curTurn+1
+		rg = turnRadius/dt
+		r = path[i].r = Math.min(path[i].r + .25/dt, rg)
+    ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2);
+  }
+}
+
+
+function isTurnCleared() {
+	var playerPath = new Path2D();
+	playerPath.ellipse(player.x, player.y, player.r * 5, player.r, player.orientation, 0, Math.PI*2, false);
+	
+	var turnPath = new Path2D();
+	turnPath.arc(path[curTurn].x, path[curTurn].y, turnRadius, 0, Math.PI*2)
+	
+	// Intersect boolean
+	return playerPath.intersects(turnPath);
+}
+
+
+function isTailCrossed() {
+	var playerPath = new Path2D();
+	playerPath.ellipse(player.x, player.y, player.r * 5, player.r, player.orientation, 0, Math.PI*2, false);
+	
+	var tracePath = new Path2D();
+	var i0 = Math.max(0, trace.length - tailLength)
+	tracePath.moveTo(trace[i0].x, trace[i0].y)
+	// length of the tightest circle is around 19
+	for (var i = i0 + 1; i < trace.length - 18; i++) {
+		tracePath.lineTo(trace[i].x, trace[i].y)
+	}
+	
+	// Intersect boolean
+	return playerPath.intersects(tracePath);
+}
+
+// ==================================================
+
+
+var player = new Player(0, 0)
+var tailCrossed = false
+var gameOver = false
+var pause = false
+var showFPS = false
+var frame = 0
+startNewTrack()
+
+
+function startNewGame() {
+	let seed = cyrb128(seedInput.value)
+	rnd = mulberry32(seed[0])
+	seedInput.blur()
+	seedSelect.blur()
+	
+	player = new Player(0, 0)
+	trace = []
+	path = GeneratePath(pathLength, segmentLength, maxTurnAngle)
+	curTurn = 0;
+
+	score = frame = 0
+	tailCrossed = false
+	gameOver = false
+	pause = false
+}
+
+function startNewTrack() {
+	curTrackBestScore = 999999
+	prevTrace = []
+	
+	startNewGame()
+}
+
+
+function endGame() {
+	saveGame()
+	
+	if (score <= curTrackBestScore) {
+		curTrackBestScore = score
+		prevTrace = trace
+	}
+}
+
+
+
+function update() {
+	player.update()
+	
+	score = frame
+	updateScore()
+	
+	if (isTurnCleared()) {
+		curTurn++
+		gameOver = curTurn >= path.length
+		if (gameOver) endGame()
+	}
+	
+	if (tailCrossed) {
+		gameOver = true
+	}
+	
+	frame++
+}
+
+
+
+function draw() { 
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.save()
+    drawBackground()
+    ctx.translate(canvas.width/2, canvas.height/2)
+		ctx.translate(-player.x, -player.y) // player's coordinate system
+		
+		//drawPath()
+		player.drawTrace()
+		drawTurns()
+		
+		ctx.translate(player.x, player.y)
+    player.draw()
+    ctx.restore()
+}
+
+
+
+// Main Loop
+setInterval(function() {
+	if (gameOver || pause) return;
+	//perf()
+	
+	update()
+	draw()
+	
+	//perf()
+	countFPS()
+}, 33) // 30fps
+
+
+</script>
+</body>
+</html>
