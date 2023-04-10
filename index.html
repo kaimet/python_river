@@ -316,6 +316,7 @@ Player.prototype.setVelocities = function() {
 	this.vy = this.speed * Math.sin(this.orientation)
 }
 
+const framesPerLine = 3
 
 Player.prototype.update = function() {
 	if (keys[37]) {            // left arrow
@@ -331,7 +332,7 @@ Player.prototype.update = function() {
 	this.x += this.vx
 	this.y += this.vy
 	
-	if (this.frame++ % 3 == 0) {
+	if (this.frame++ % framesPerLine == 0) {
 		trace.push({x: this.x, y: this.y, or: this.orientation});
 		this.iPos++
 		/*if (trace.length > 1500) {
@@ -396,10 +397,16 @@ Player.prototype.drawTrace = function() {
 		}
 		ctx.stroke()
 	
+		// drawing ghost with smooth interpolation
 		ctx.save()
 		i--
-		ctx.translate(prevTrace[i].x, prevTrace[i].y)
-		ctx.rotate(prevTrace[i].or - Math.PI / 2)
+		var k = ((frame-1) % framesPerLine) / framesPerLine
+		var ii = Math.min(i+1,prevTrace.length-1)
+		var xk = prevTrace[i].x + (prevTrace[ii].x - prevTrace[i].x) * k
+		var yk = prevTrace[i].y + (prevTrace[ii].y - prevTrace[i].y) * k
+		ctx.translate(xk, yk)
+		var ork = prevTrace[i].or + (prevTrace[ii].or - prevTrace[i].or) * k
+		ctx.rotate(ork - Math.PI / 2)
 		ctx.globalAlpha = 0.7
 		ctx.drawImage(ghostImage, -player.r, -player.r*5, player.r * 2, player.r * 10)
 		ctx.restore()
