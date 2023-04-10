@@ -10,7 +10,7 @@
 <input type="text" id="seed" value="batik" style="font-family: monospace;">
 <select name="seeds" id="seedSelect" style="font-family: monospace;"></select>
 <button type="button" id="seedRemoveButton">Remove current seed</button>
-<button type="button" id="clearButton">Clear all to initial state</button>
+<!-- <button type="button" id="clearButton">Clear all to initial state</button> -->
 
 <div id="container" style="display: flex; justify-content: center;">
 <canvas id="gameCanvas" width="500" height="500" style="border:3px solid #444444;"></canvas>
@@ -196,6 +196,7 @@ removeButton.addEventListener("click", function() {
   }
 });
 
+/*
 let clearButton = document.getElementById("clearButton");
 
 clearButton.addEventListener("click", function() {
@@ -203,7 +204,7 @@ clearButton.addEventListener("click", function() {
 	seeds = INITIAL_SEEDS
 	seedSelect.innerHTML = ""
   updateSeedSelect()
-});
+});*/
 
 // =============================================
 
