@@ -7,7 +7,7 @@
 <body style="background-image: url('img/bg.jpg')">
 
 <label for="seed">Seed:</label>
-<input type="text" id="seed" value="Nile" style="font-family: monospace;">
+<input type="text" id="seed" value="Dnipro" style="font-family: monospace;">
 <select name="seeds" id="seedSelect" style="font-family: monospace;"></select>
 <button type="button" id="seedRemoveButton">Remove current seed</button>
 <!-- <button type="button" id="clearButton">Clear all to initial state</button> -->
@@ -55,7 +55,7 @@ const turnRadius = 15
 const maxTurnAngle = Math.PI*2/3
 const segmentLength = 100
 const tailLength = 90
-
+const msPerFrame = 33 // ~30 fps
 
 // ===================================================
 
@@ -102,11 +102,12 @@ curTurnImage.src = "img/curturn.png"
 // ================
 //localStorage.clear();
 //localStorage.removeItem("seeds");
+//localStorage.removeItem("scores");
 
-const MAX_SEEDS = 500; // not used
+//const MAX_SEEDS = 500; // not used
 
 const rivers = [
-  "Nile", "Amazon", "Yangtze", "Mississippi", "Yenisei", "Parana", "Congo", "Dnipro", "Amur", "Lena", "Volga", "Mekong", "Mackenzie", "Niger", "Murray", "Euphrates", "Yukon", "Indus", "Danube", "Ganges", "Brahmaputra", "Colorado", "Orinoco", "Arkansas", "Paraguay", "Zambezi", 
+  "Dnipro", "Congo", "Mississippi", "Nile", "Amazon", "Yangtze", "Yenisei", "Parana", "Amur", "Lena", "Volga", "Mekong", "Mackenzie", "Niger", "Murray", "Euphrates", "Yukon", "Indus", "Danube", "Ganges", "Brahmaputra", "Colorado", "Orinoco", "Arkansas", "Paraguay", "Zambezi", 
 ];
 
 const INITIAL_SEEDS = rivers;
@@ -270,7 +271,7 @@ setInterval(function(){
 
 
 function updateScore() {
-	scoreElement.innerHTML = 'Length: ' + score
+	scoreElement.innerHTML = 'Frames: ' + score
 }
 
 
@@ -335,9 +336,6 @@ Player.prototype.update = function() {
 	if (this.frame++ % framesPerLine == 0) {
 		trace.push({x: this.x, y: this.y, or: this.orientation});
 		this.iPos++
-		/*if (trace.length > 1500) {
-				trace.shift();
-		}*/
 	}
 	
 }
@@ -389,8 +387,9 @@ Player.prototype.drawTrace = function() {
 	
 	// best trace from this session
 	if (prevTrace.length > 0) {
-		ctx.strokeStyle = '#888888'
+		ctx.strokeStyle = gameOver ? '#993399' : '#888888'
 		var i0 = clamp(trace.length - tailLength, 0, prevTrace.length-1)
+		if (gameOver) i0 = 0
 		ctx.moveTo(prevTrace[i0].x, prevTrace[i0].y)
 		for (var i = i0 + 1; i < trace.length && i < prevTrace.length; i++) {
 			ctx.lineTo(prevTrace[i].x, prevTrace[i].y)
@@ -418,6 +417,7 @@ Player.prototype.drawTrace = function() {
 	tailCrossed = isTailCrossed()
 	ctx.strokeStyle = tailCrossed ? 'red' : 'blue'
 	i0 = Math.max(0, trace.length - tailLength)
+	if (gameOver) i0 = 0
 	ctx.moveTo(trace[i0].x, trace[i0].y)
 	for (var i = i0 + 1; i < trace.length; i++) { 
 		ctx.lineTo(trace[i].x, trace[i].y)
@@ -446,6 +446,7 @@ function GeneratePath(turns, segmentLength, roughness) {
         currentY += segmentLength * Math.sin(currentAngle);
         path.push({x: currentX, y: currentY, r: 0});
     }
+		path[1].r = turnRadius/2
     return path;
 }
 
@@ -492,20 +493,28 @@ function drawTurns(){
   ctx.shadowOffsetX = 3;
   ctx.shadowOffsetY = 3;
 	
-	let i = curTurn-1
-	let im = curTurnImage
-	if (i >= 0 && path[i].r > 0) {
-		var r = path[i].r -= 2
-		ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2)
+	if (gameOver) {
+		for (i=0; i < path.length; i++) {
+			let im = i < curTurn ? curTurnImage : turnImage
+			r = turnRadius
+			ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2)
+		}
+	} else {
+		let i = curTurn-1
+		let im = curTurnImage
+		if (i >= 0 && path[i].r > 0) {
+			var r = path[i].r -= 2
+			ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2)
+		}
+		
+		for (i=curTurn; i < curTurn+5 && i < path.length; i++) {
+			im = i == curTurn ? curTurnImage : turnImage;
+			var dt = i-curTurn+1
+			rg = turnRadius/dt
+			r = path[i].r = Math.min(path[i].r + .25/dt, rg)
+			ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2)
+		}
 	}
-	
-  for (i=curTurn; i < curTurn+7 && i < path.length; i++) {
-    im = i == curTurn ? curTurnImage : turnImage;
-		var dt = i-curTurn+1
-		rg = turnRadius/dt
-		r = path[i].r = Math.min(path[i].r + .25/dt, rg)
-    ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2);
-  }
 }
 
 
@@ -554,6 +563,7 @@ function startNewGame() {
 	rnd = mulberry32(seed[0])
 	seedInput.blur()
 	seedSelect.blur()
+	window.scrollTo(0, 0)
 	
 	player = new Player(0, 0)
 	trace = []
@@ -579,7 +589,10 @@ function endGame() {
 	
 	if (score <= curTrackBestScore) {
 		curTrackBestScore = score
-		prevTrace = trace
+		setTimeout(()=>{ // allow to draw first
+			makeFinalSnapshot()
+			prevTrace = trace
+		}, 1)
 	}
 }
 
@@ -610,8 +623,17 @@ function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.save()
     drawBackground()
-    ctx.translate(canvas.width/2, canvas.height/2)
-		ctx.translate(-player.x, -player.y) // player's coordinate system
+		
+		if (gameOver) {
+			v = viewportToFitAll()
+			ctx.translate(-v.dx, -v.dy)
+			ctx.translate(v.dx * (1 - v.scale), v.dy * (1 - v.scale))
+			ctx.scale(v.scale, v.scale)
+			ctx.translate(-Math.min(v.d, 0), Math.max(0, v.d))
+		} else {
+			ctx.translate(canvas.width/2, canvas.height/2)
+			ctx.translate(-player.x, -player.y) // player's coordinate system
+		}
 		
 		//drawPath()
 		player.drawTrace()
@@ -622,6 +644,110 @@ function draw() {
     ctx.restore()
 }
 
+function viewportToFitAll() {
+	let minX = Infinity;
+	let minY = Infinity;
+	let maxX = -Infinity;
+	let maxY = -Infinity;
+	
+	for (let point of trace.concat(prevTrace)) {
+			minX = Math.min(minX, point.x);
+			minY = Math.min(minY, point.y);
+			maxX = Math.max(maxX, point.x);
+			maxY = Math.max(maxY, point.y);
+	}
+	let b = 25
+	minX -= b
+	minY -= b
+	maxX += b
+	maxY += b
+	
+	let w = maxX - minX
+	let h = maxY - minY
+	
+	let scale = Math.min(canvas.width / w, canvas.height / h);
+	
+	let d = (w - h) / 2
+	
+	return {dx: minX, dy: minY, scale: scale, d: d}
+}
+
+
+function makeFinalSnapshot() {
+	ctx.font = "32px Arial";
+	ctx.fillStyle = "darkblue";
+	ctx.fillText(score, 12, 36);
+				
+	var dataURL = canvas.toDataURL();
+	
+	// just an image
+	/*var img = document.createElement('img');
+	img.src = dataURL;
+	img.style.display = 'block';
+	img.style.margin = '20px auto';
+	document.body.appendChild(img);*/
+	
+	var fileName = seedInput.value + '_' + score + '.png';
+	
+	// clickable image 
+	/*var link = document.createElement('a');
+	link.href = dataURL;
+	link.download = fileName;
+	//link.style.display = 'block';
+	//link.style.margin = '0 auto';
+	var img = document.createElement('img');
+	img.style.display = 'block';
+	img.style.margin = '20px auto'
+	img.src = dataURL;
+	link.appendChild(img);
+	document.body.appendChild(link);*/
+	
+	
+	// image and a link
+	/*var img = document.createElement('img');
+	img.src = dataURL;
+	img.style.display = 'block';
+	img.style.margin = '0 auto';
+	document.body.appendChild(img);
+	var div = document.createElement('div');
+	div.style.textAlign = 'center';
+	var link = document.createElement('a');
+	link.href = dataURL;
+	link.download = fileName;
+	link.textContent = 'Download Image';
+	div.appendChild(link);
+	document.body.appendChild(div);*/
+	
+	
+	// image with download icon
+	var outerWrapper = document.createElement('div');
+	outerWrapper.style.display = 'block';
+	outerWrapper.style.textAlign = 'center';
+	var wrapper = document.createElement('div');
+	wrapper.style.position = 'relative';
+	wrapper.style.display = 'inline-block';
+	var img = document.createElement('img');
+	img.src = dataURL;
+	wrapper.appendChild(img);
+	var icon = document.createElement('img');
+	icon.src = 'img/download-icon.png'; // example icon URL
+	icon.style.position = 'absolute';
+	icon.style.bottom = '0';
+	icon.style.right = '0';
+	icon.style.cursor = 'pointer';
+	icon.addEventListener('click', function() {
+		var link = document.createElement('a');
+		link.href = dataURL;
+		link.download = fileName;
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	});
+	wrapper.appendChild(icon);
+	outerWrapper.appendChild(wrapper);
+	document.body.appendChild(outerWrapper);
+	
+}
 
 
 // Main Loop
@@ -634,7 +760,7 @@ setInterval(function() {
 	
 	//perf()
 	countFPS()
-}, 33) // 30fps
+}, msPerFrame)
 
 
 </script>
