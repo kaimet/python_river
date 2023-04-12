@@ -615,6 +615,7 @@ function startNewTrack() {
 	curTrackBestScore = 999999
 	prevTrace = []
 	RemoveImages()
+	addThumbnailsDiv()
 	
 	startNewGame()
 }
@@ -717,20 +718,39 @@ function viewportToFitAll() {
 }
 
 
+var thumbnailsDiv
+function addThumbnailsDiv() {
+	thumbnailsDiv = document.createElement('div');
+	thumbnailsDiv.classList.add('image-wrapper');
+	thumbnailsDiv.style.display = 'block';
+	thumbnailsDiv.style.textAlign = 'center';
+	document.body.appendChild(thumbnailsDiv);
+}
+
+
 function makeFinalSnapshot() {
-	ctx.font = "32px Arial";
+	ctx.font = "56px Arial";
 	ctx.fillStyle = "darkblue";
-	ctx.fillText(score, 12, 36);
+	ctx.fillText(score, 12, 52);
 				
 	//var dataURL = canvas.toDataURL();
 	var dataURL = canvas.toDataURL("image/jpeg", 0.85);
 	
-	// just an image
-	/*var img = document.createElement('img');
-	img.src = dataURL;
-	img.style.display = 'block';
-	img.style.margin = '20px auto';
-	document.body.appendChild(img);*/
+	// thumbnail
+	var imgThumbnail = document.createElement('img');
+	imgThumbnail.src = dataURL;
+	imgThumbnail.width = 155;
+	imgThumbnail.height = 155;
+	imgThumbnail.style.margin = '20px 8px';
+	thumbnailsDiv.appendChild(imgThumbnail);
+	
+	
+	draw()
+	ctx.font = "32px Arial";
+	ctx.fillStyle = "darkblue";
+	ctx.fillText(score, 12, 36);
+				
+	dataURL = canvas.toDataURL("image/jpeg", 0.85);
 	
 	//var fileName = seedInput.value + '_' + score + '.png';
 	var fileName = 'pr_' + seedInput.value + '_' + score + '.jpg';

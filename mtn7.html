@@ -549,6 +549,8 @@ function startNewGame() {
 function startNewTrack() {
 	curTrackBestScore = 999999
 	prevTrace = []
+	RemoveImages()
+	addThumbnailsDiv()
 	
 	startNewGame()
 }
@@ -623,6 +625,14 @@ function viewportToFitAll() {
 			maxX = Math.max(maxX, point.x);
 			maxY = Math.max(maxY, point.y);
 	}
+	
+	for (let point of path) {
+		minX = Math.min(minX, point.x - turnRadius);
+		minY = Math.min(minY, point.y - turnRadius);
+		maxX = Math.max(maxX, point.x + turnRadius);
+		maxY = Math.max(maxY, point.y + turnRadius);
+	}
+	
 	let b = 25
 	minX -= b
 	minY -= b
@@ -640,12 +650,39 @@ function viewportToFitAll() {
 }
 
 
+var thumbnailsDiv
+function addThumbnailsDiv() {
+	thumbnailsDiv = document.createElement('div');
+	thumbnailsDiv.classList.add('image-wrapper');
+	thumbnailsDiv.style.display = 'block';
+	thumbnailsDiv.style.textAlign = 'center';
+	document.body.appendChild(thumbnailsDiv);
+}
+
+
 function makeFinalSnapshot() {
+	ctx.font = "56px Arial";
+	ctx.fillStyle = "darkblue";
+	ctx.fillText(score, 12, 52);
+				
+	//var dataURL = canvas.toDataURL();
+	var dataURL = canvas.toDataURL("image/jpeg", 0.85);
+	
+	// thumbnail
+	var imgThumbnail = document.createElement('img');
+	imgThumbnail.src = dataURL;
+	imgThumbnail.width = 155;
+	imgThumbnail.height = 155;
+	imgThumbnail.style.margin = '20px 8px';
+	thumbnailsDiv.appendChild(imgThumbnail);
+	
+	
+	draw()
 	ctx.font = "32px Arial";
 	ctx.fillStyle = "darkblue";
 	ctx.fillText(score, 12, 36);
 				
-	var dataURL = canvas.toDataURL();
+	dataURL = canvas.toDataURL("image/jpeg", 0.85);
 	
 	// just an image
 	/*var img = document.createElement('img');
@@ -654,40 +691,11 @@ function makeFinalSnapshot() {
 	img.style.margin = '20px auto';
 	document.body.appendChild(img);*/
 	
-	var fileName = seedInput.value + '_' + score + '.png';
-	
-	// clickable image 
-	/*var link = document.createElement('a');
-	link.href = dataURL;
-	link.download = fileName;
-	//link.style.display = 'block';
-	//link.style.margin = '0 auto';
-	var img = document.createElement('img');
-	img.style.display = 'block';
-	img.style.margin = '20px auto'
-	img.src = dataURL;
-	link.appendChild(img);
-	document.body.appendChild(link);*/
-	
-	
-	// image and a link
-	/*var img = document.createElement('img');
-	img.src = dataURL;
-	img.style.display = 'block';
-	img.style.margin = '0 auto';
-	document.body.appendChild(img);
-	var div = document.createElement('div');
-	div.style.textAlign = 'center';
-	var link = document.createElement('a');
-	link.href = dataURL;
-	link.download = fileName;
-	link.textContent = 'Download Image';
-	div.appendChild(link);
-	document.body.appendChild(div);*/
-	
+	var fileName = 'mtn_' + seedInput.value + '_' + score + '.jpg';
 	
 	// image with download icon
 	var outerWrapper = document.createElement('div');
+	outerWrapper.classList.add('image-wrapper');
 	outerWrapper.style.display = 'block';
 	outerWrapper.style.textAlign = 'center';
 	var wrapper = document.createElement('div');
@@ -713,9 +721,14 @@ function makeFinalSnapshot() {
 	wrapper.appendChild(icon);
 	outerWrapper.appendChild(wrapper);
 	document.body.appendChild(outerWrapper);
-	
 }
 
+function RemoveImages() {
+	var outerWrappers = document.querySelectorAll('.image-wrapper');
+	for (var i = 0; i < outerWrappers.length; i++) {
+			document.body.removeChild(outerWrappers[i]);
+	}
+}
 
 
 
