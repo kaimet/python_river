@@ -95,6 +95,7 @@ var turnImage = new Image()
 turnImage.src = "img/turn.png"
 var curTurnImage = new Image()
 curTurnImage.src = "img/curturn.png"
+var tickImage = playerImage
 
 //var bounceSound = new Audio('sounds/bounceball.mp3')
 
@@ -107,7 +108,7 @@ curTurnImage.src = "img/curturn.png"
 //const MAX_SEEDS = 500; // not used
 
 const rivers = [
-  "Dnipro", "Congo", "Mississippi", "Nile", "Amazon", "Yangtze", "Yenisei", "Parana", "Amur", "Lena", "Volga", "Mekong", "Mackenzie", "Niger", "Murray", "Euphrates", "Yukon", "Indus", "Danube", "Ganges", "Brahmaputra", "Colorado", "Orinoco", "Arkansas", "Paraguay", "Zambezi", 
+  "Dnipro", "Congo", "Mississippi", "👍", "Nile", "Amazon", "Yangtze", "Yenisei", "Parana", "Amur", "Lena", "Volga", "Mekong", "Mackenzie", "Niger", "Murray", "Euphrates", "Yukon", "Indus", "Danube", "Ganges", "Brahmaputra", "Colorado", "Orinoco", "Arkansas", "Paraguay", "Zambezi", 
 ];
 
 const INITIAL_SEEDS = rivers;
@@ -395,6 +396,9 @@ Player.prototype.drawTrace = function() {
 			ctx.lineTo(prevTrace[i].x, prevTrace[i].y)
 		}
 		ctx.stroke()
+		
+		//if (gameOver) drawScaleOnTrace2(prevTrace)
+		
 	
 		// drawing ghost with smooth interpolation
 		ctx.save()
@@ -423,6 +427,37 @@ Player.prototype.drawTrace = function() {
 		ctx.lineTo(trace[i].x, trace[i].y)
 	}
 	ctx.stroke()
+	
+	//if (gameOver) drawScaleOnTrace2(trace)
+	
+}
+
+// not used
+function drawScaleOnTrace2(trace) { 
+	for (var i = 10; i < trace.length; i+=10) {
+		let r = i % 50 === 0 ? 6 : 3
+		ctx.drawImage(tickImage, trace[i].x-r, trace[i].y-r, r * 2, r * 2)
+	}
+}
+
+// not used
+function drawScaleOnTrace(trace) { 
+	const shortTick = 3;
+	const longTick = 7;
+
+	for (var i = 10; i < trace.length; i+=10) {
+		let tick = i % 50 === 0 ? longTick : shortTick
+		var dx = trace[i].x - trace[i - 1].x;
+		var dy = trace[i].y - trace[i - 1].y;
+		var hypot = Math.hypot(dx, dy);
+		var x1 = trace[i].x - tick * dy / hypot;
+		var y1 = trace[i].y + tick * dx / hypot;
+		var x2 = trace[i].x + tick * dy / hypot;
+		var y2 = trace[i].y - tick * dx / hypot;
+		ctx.moveTo(x1, y1);
+		ctx.lineTo(x2, y2);
+	}
+	ctx.stroke();
 }
 
 // ==================================================
@@ -579,6 +614,7 @@ function startNewGame() {
 function startNewTrack() {
 	curTrackBestScore = 999999
 	prevTrace = []
+	RemoveImages()
 	
 	startNewGame()
 }
@@ -656,6 +692,14 @@ function viewportToFitAll() {
 			maxX = Math.max(maxX, point.x);
 			maxY = Math.max(maxY, point.y);
 	}
+	
+	for (let point of path) {
+		minX = Math.min(minX, point.x - turnRadius);
+		minY = Math.min(minY, point.y - turnRadius);
+		maxX = Math.max(maxX, point.x + turnRadius);
+		maxY = Math.max(maxY, point.y + turnRadius);
+	}
+	
 	let b = 25
 	minX -= b
 	minY -= b
@@ -678,7 +722,8 @@ function makeFinalSnapshot() {
 	ctx.fillStyle = "darkblue";
 	ctx.fillText(score, 12, 36);
 				
-	var dataURL = canvas.toDataURL();
+	//var dataURL = canvas.toDataURL();
+	var dataURL = canvas.toDataURL("image/jpeg", 0.85);
 	
 	// just an image
 	/*var img = document.createElement('img');
@@ -687,7 +732,8 @@ function makeFinalSnapshot() {
 	img.style.margin = '20px auto';
 	document.body.appendChild(img);*/
 	
-	var fileName = seedInput.value + '_' + score + '.png';
+	//var fileName = seedInput.value + '_' + score + '.png';
+	var fileName = 'pr_' + seedInput.value + '_' + score + '.jpg';
 	
 	// clickable image 
 	/*var link = document.createElement('a');
@@ -721,6 +767,7 @@ function makeFinalSnapshot() {
 	
 	// image with download icon
 	var outerWrapper = document.createElement('div');
+	outerWrapper.classList.add('image-wrapper');
 	outerWrapper.style.display = 'block';
 	outerWrapper.style.textAlign = 'center';
 	var wrapper = document.createElement('div');
@@ -746,7 +793,13 @@ function makeFinalSnapshot() {
 	wrapper.appendChild(icon);
 	outerWrapper.appendChild(wrapper);
 	document.body.appendChild(outerWrapper);
-	
+}
+
+function RemoveImages() {
+	var outerWrappers = document.querySelectorAll('.image-wrapper');
+	for (var i = 0; i < outerWrappers.length; i++) {
+			document.body.removeChild(outerWrappers[i]);
+	}
 }
 
 
