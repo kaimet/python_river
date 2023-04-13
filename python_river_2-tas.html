@@ -13,7 +13,10 @@
 <!-- <button type="button" id="clearButton">Clear all to initial state</button> -->
 
 <div id="container" style="display: flex; justify-content: center;">
-<canvas id="gameCanvas" width="500" height="500" style="border:3px solid #444444;"></canvas>
+	<textarea id="actionsTextArea" rows="10" cols="23" style="resize: none;"></textarea>
+	<button type="button" id="replayButton">Replay</button>
+
+	<canvas id="gameCanvas" width="500" height="500" style="border:3px solid #444444;"></canvas>
 </div>
 
 <div id="scoreContainer" style="display: block; text-align: center;"></div>
@@ -103,12 +106,12 @@ var tickImage = playerImage
 // ================
 
 //localStorage.clear();
-//localStorage.removeItem("pr2_seeds"); localStorage.removeItem("pr2_scores"); localStorage.removeItem("pr2_lastplayedseed");
+//localStorage.removeItem("pr2tas_seeds"); localStorage.removeItem("pr2tas_scores"); localStorage.removeItem("pr2tas_lastplayedseed");
 
 //const MAX_SEEDS = 500; // not used
 
 const rivers = [
-  "Ganges", "Colorado", "Nile", "Amazon", "Yangtze", "Parana", "Lena", "Niger", "Paraguay", "Congo", "io", "k", "Euphrates", "Mackenzie", "Mekong", "Zambezi"
+  "Ganges", "Colorado", "Nile", "Amazon", "Yangtze", "Parana", "k", "io", "Paraguay", "Lena", "Niger", "Congo", "Euphrates", "Mackenzie", "Mekong", "Zambezi"
 ];
 
 const INITIAL_SEEDS = rivers;
@@ -116,12 +119,12 @@ const INITIAL_SEEDS = rivers;
 let seedInput = document.getElementById("seed");
 let seedSelect = document.getElementById("seedSelect");
 
-let seeds = JSON.parse(localStorage.getItem("pr2_seeds")) || INITIAL_SEEDS;
-let scores = JSON.parse(localStorage.getItem("pr2_scores")) || {};
+let seeds = JSON.parse(localStorage.getItem("pr2tas_seeds")) || INITIAL_SEEDS;
+let scores = JSON.parse(localStorage.getItem("pr2tas_scores")) || {};
 
 updateSeedSelect();
 
-let savedSeed = localStorage.getItem("pr2_lastplayedseed")
+let savedSeed = localStorage.getItem("pr2tas_lastplayedseed")
 if (!savedSeed) savedSeed = INITIAL_SEEDS[0]
 seedInput.value = savedSeed;
 seedSelect.value = savedSeed;
@@ -159,7 +162,7 @@ seedInput.addEventListener("change", function() {
 
 function saveGame() {
     let seed = seedInput.value;
-		localStorage.setItem("pr2_lastplayedseed", seedInput.value);
+		localStorage.setItem("pr2tas_lastplayedseed", seedInput.value);
 		
     let index = seeds.indexOf(seed);
     if (index !== -1) {
@@ -169,12 +172,12 @@ function saveGame() {
     /*if (seeds.length > MAX_SEEDS) {
         seeds.pop();
     }*/
-    localStorage.setItem("pr2_seeds", JSON.stringify(seeds));
+    localStorage.setItem("pr2tas_seeds", JSON.stringify(seeds));
     updateSeedSelect();
 		
     if (!scores[seed] || score < scores[seed]) {
         scores[seed] = score;
-        localStorage.setItem("pr2_scores", JSON.stringify(scores));
+        localStorage.setItem("pr2tas_scores", JSON.stringify(scores));
         updateSeedSelect();
 				seedSelect.value = seedInput.value;
     }
@@ -191,8 +194,8 @@ removeButton.addEventListener("click", function() {
     // Remove the seed from the scores object
     delete scores[seedToRemove];
     // Update localStorage
-    localStorage.setItem("pr2_seeds", JSON.stringify(seeds));
-    localStorage.setItem("pr2_scores", JSON.stringify(scores));
+    localStorage.setItem("pr2tas_seeds", JSON.stringify(seeds));
+    localStorage.setItem("pr2tas_scores", JSON.stringify(scores));
     // Update the seed select element
     updateSeedSelect();
   }
@@ -215,15 +218,24 @@ var keys = {};
 var curAction = 0
 
 document.onkeydown = document.onkeyup = function(e) {
-	if (e.target.tagName === 'INPUT') return;
+    if (e.target.tagName === 'INPUT' || 
+				e.target.tagName === 'TEXTAREA') 
+					return;
 	
 	keys[e.keyCode] = e.type == 'keydown'
 	//db(e.keyCode)
 	
-	if (e.type == 'keydown' && (e.keyCode == 37)) {
-		curAction = -1
-	} else if (e.type == 'keydown' && (e.keyCode == 39)) {
-		curAction = 1
+	if (!playbackMode) {
+		if (e.type == 'keydown' && (e.keyCode == 37)) {
+			curAction = -1
+		} else if (e.type == 'keydown' && (e.keyCode == 39)) {
+			curAction = 1
+		}
+	}
+	
+	// Replay on R
+	if (e.type == 'keydown' && (e.keyCode == 82)) {
+		startPlayback()
 	}
 	
 	// Pause on P
@@ -319,7 +331,7 @@ function Player(x, y) {
 	this.frame = 0;
 	this.iPos = 0;
 	this.lastAction = 0;
-	
+	this.iPlayback = 0
 } 
 
 Player.prototype.setVelocities = function() {
@@ -330,11 +342,15 @@ Player.prototype.setVelocities = function() {
 const framesPerLine = 3
 
 Player.prototype.update = function() {
-	if (curAction !== this.lastAction) {
-		this.saveAction(curAction, this.frame)
-		this.lastAction = curAction
+	if (playbackMode) {
+		this.setAction()
+	} else {
+		if (curAction !== this.lastAction) {
+			this.saveAction(curAction, this.frame)
+			this.lastAction = curAction
+		}
 	}
-		
+	
 	this.turnForce += turnForce * curAction
 	this.turnForce = clamp(this.turnForce, -0.1, 0.1)
 	
@@ -352,10 +368,21 @@ Player.prototype.update = function() {
 	
 }
 
-
 Player.prototype.saveAction = function(action, currentFrame) {
     actions.push({frame: currentFrame, action: action,
 									x: this.x, y: this.y, or: this.orientation});
+}
+
+Player.prototype.setAction = function() {
+	if (this.iPlayback < actions.length) {
+		if (this.frame == actions[this.iPlayback].frame) {
+			curAction = actions[this.iPlayback].action
+			actions[this.iPlayback].x = this.x
+			actions[this.iPlayback].y = this.y
+			actions[this.iPlayback].or = this.orientation
+			this.iPlayback++
+		}
+	}
 }
 
 
@@ -366,6 +393,7 @@ Player.prototype.draw = function() {
 	ctx.restore()
 	if (!gameOver) this.drawArrows()
 }
+
 
 Player.prototype.drawArrows = function() {
 	if (curAction == -1) { // left arrow
@@ -425,6 +453,8 @@ Player.prototype.drawActions = function() {
 		ctx.restore()
 	}
 }
+
+
 
 
 Player.prototype.drawTrace = function() {
@@ -640,6 +670,7 @@ var gameOver = false
 var pause = false
 var showFPS = false
 var frame = 0
+var playbackMode = false
 let actions = []
 
 startNewTrack()
@@ -662,6 +693,7 @@ function startNewGame() {
 	tailCrossed = false
 	gameOver = false
 	pause = false
+	playbackMode = false
 }
 
 function startNewTrack() {
@@ -669,15 +701,59 @@ function startNewTrack() {
 	prevTrace = []
 	RemoveImages()
 	addThumbnailsDiv()
+	playbackMode = false
 	
 	startNewGame()
+}
+
+function startPlayback() {
+	playbackMode = true
+	player = new Player(0, 0)
+	trace = []
+	curTurn = 0;
+	score = frame = 0
+	curAction = 0
+	tailCrossed = false
+	gameOver = false
+	pause = false
+	replayButton.blur()
+	window.scrollTo(0, 0)
+}
+
+let replayButton = document.getElementById("replayButton");
+replayButton.addEventListener("click", function() {
+	parseActions()
+	startPlayback()
+});
+
+function displayActions() {
+    let actionsText = "";
+    for (let i = 0; i < actions.length; i++) {
+        actionsText += "Frame: " + actions[i].frame + ", Action: " + actions[i].action + "\n";
+    }
+    document.getElementById("actionsTextArea").value = actionsText;
+}
+
+function parseActions() {
+    let actionsText = document.getElementById("actionsTextArea").value;
+    let lines = actionsText.split("\n");
+    actions = [];
+    for (let i = 0; i < lines.length; i++) {
+        let parts = lines[i].split(",");
+        if (parts.length == 2) {
+            let frame = parseInt(parts[0].split(":")[1]);
+            let action = parts[1].split(":")[1].trim();
+            actions.push({frame: frame, action: action});
+        }
+    }
 }
 
 
 function endGame() {
 	saveGame()
+	displayActions()
 	
-	if (score <= curTrackBestScore) {
+	if (score < curTrackBestScore) {
 		curTrackBestScore = score
 		setTimeout(()=>{ // allow to draw first
 			makeFinalSnapshot()
