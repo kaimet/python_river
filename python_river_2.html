@@ -11,6 +11,7 @@
 <select name="seeds" id="seedSelect" style="font-family: monospace;"></select>
 <button type="button" id="seedRemoveButton">Remove current seed</button>
 <!-- <button type="button" id="clearButton">Clear all to initial state</button> -->
+&nbsp; <a href="mtn7.html">Desert River</a>
 
 <div id="container" style="display: flex; justify-content: center;">
 <canvas id="gameCanvas" width="500" height="500" style="border:3px solid #444444;"></canvas>
@@ -51,6 +52,7 @@ const playerRad = 5
 const playerSpeed = 2.5
 const turnForce = 0.002
 //const pathLength = 7 // random now
+const averageGames = 3
 const turnRadius = 15
 const maxTurnAngle = Math.PI*2/3
 const segmentLength = 100
@@ -59,17 +61,13 @@ const msPerFrame = 33 // ~30 fps
 
 // ===================================================
 
-/*
-let seedInput = document.getElementById("seed")
-let savedSeed = localStorage.getItem("seed")
-if (savedSeed) seedInput.value = savedSeed
-var seed = cyrb128(document.getElementById("seed").value)
-var rnd = mulberry32(seed[0])*/
-
-
 var scoreElement = document.createElement('div')
 scoreContainer.appendChild(scoreElement)
-scoreElement.style.fontSize = '32px'
+scoreElement.style.fontSize = '24px'
+
+var avScoreElement = document.createElement('div')
+scoreContainer.appendChild(avScoreElement)
+avScoreElement.style.fontSize = '20px'
 
 var fpsOut = document.createElement('div')
 document.body.appendChild(fpsOut)
@@ -103,7 +101,7 @@ var tickImage = playerImage
 // ================
 
 //localStorage.clear();
-//localStorage.removeItem("pr2_seeds"); localStorage.removeItem("pr2_scores"); localStorage.removeItem("pr2_lastplayedseed");
+//localStorage.removeItem("pr2_seeds"); localStorage.removeItem("pr2_scores");  localStorage.removeItem("pr2_avScores"); localStorage.removeItem("pr2_lastplayedseed");
 
 //const MAX_SEEDS = 500; // not used
 
@@ -118,6 +116,7 @@ let seedSelect = document.getElementById("seedSelect");
 
 let seeds = JSON.parse(localStorage.getItem("pr2_seeds")) || INITIAL_SEEDS;
 let scores = JSON.parse(localStorage.getItem("pr2_scores")) || {};
+let avScores = JSON.parse(localStorage.getItem("pr2_avScores")) || {};
 
 updateSeedSelect();
 
@@ -140,8 +139,9 @@ function updateSeedSelect() {
         let seed = seeds[i];
         let paddedSeed = seed.padEnd(maxLength, "\u00A0");
         let score = scores[seed] || 0;
+        let avscore = avScores[seed] || 0;
         let seedOption = document.createElement("option");
-        seedOption.textContent = `${paddedSeed}   (your best score: ${score})`;
+        seedOption.textContent = `${paddedSeed}  (${score} | ${avscore})`;
         seedOption.value = seed;
         seedSelect.appendChild(seedOption);
     }
@@ -175,9 +175,15 @@ function saveGame() {
     if (!scores[seed] || score < scores[seed]) {
         scores[seed] = score;
         localStorage.setItem("pr2_scores", JSON.stringify(scores));
-        updateSeedSelect();
-				seedSelect.value = seedInput.value;
     }
+    if (!avScores[seed] || 
+		(avScore > 0 && avScore < avScores[seed])) {
+        avScores[seed] = avScore;
+        localStorage.setItem("pr2_avScores", JSON.stringify(avScores));
+    }
+		
+		updateSeedSelect();
+		seedSelect.value = seedInput.value;
 }
 
 
@@ -190,9 +196,11 @@ removeButton.addEventListener("click", function() {
     seeds = seeds.filter(seed => seed !== seedToRemove);
     // Remove the seed from the scores object
     delete scores[seedToRemove];
+    delete avScores[seedToRemove];
     // Update localStorage
     localStorage.setItem("pr2_seeds", JSON.stringify(seeds));
     localStorage.setItem("pr2_scores", JSON.stringify(scores));
+    localStorage.setItem("pr2_avScores", JSON.stringify(avScores));
     // Update the seed select element
     updateSeedSelect();
   }
@@ -509,7 +517,56 @@ function drawScaleOnTrace(trace) {
 	ctx.stroke();
 }
 
-// ==================================================
+
+// not used
+function drawAveragePlayer(){
+	if (traces.length < 2) return;
+	
+	let t = averageGhost()
+	const r = 5;
+	ctx.globalAlpha = 0.7
+	ctx.drawImage(ghostImage, t.x - r, t.y - r, r * 2, r * 2)
+	ctx.globalAlpha = 1
+}
+
+function averageGhost(){
+	var f = Math.floor(frame / framesPerLine) 
+	let avX = 0
+	let avY = 0
+	let avOr = 0
+	for (t of traces){
+		avX += f < t.length ? t[f].x : t[t.length-1].x
+		avY += f < t.length ? t[f].y : t[t.length-1].y
+		//avOr += f < t.length ? t[f].or : t[t.length-1].or
+	}
+	avX /= traces.length
+	avY /= traces.length
+	avOr /= traces.length
+	
+	return {x: avX, y: avY, or: avOr}
+}
+
+
+function drawAverageCircle() {
+	let x = path[path.length-1].x
+	let y = path[path.length-1].y
+	
+	let r = Math.max(0, (scores[curSeed] - frame) * player.speed + turnRadius)
+	ctx.beginPath();
+	ctx.arc(x, y, r, 0, Math.PI * 2);
+	ctx.strokeStyle = "#6666aa";
+	ctx.stroke();
+	
+	if (lastScores.length >= averageGames - 1) {
+		r = Math.max(0, (neededScoreForAverage - frame) * player.speed + turnRadius)
+		ctx.beginPath();
+		ctx.arc(x, y, r, 0, Math.PI * 2);
+		ctx.strokeStyle = "#777777";
+		ctx.stroke();
+	}
+}
+
+
 
 
 function GeneratePath(segmentLength, roughness) {
@@ -637,6 +694,7 @@ function isTailCrossed() {
 var player = new Player(0, 0)
 var tailCrossed = false
 var gameOver = false
+var finished = false
 var pause = false
 var showFPS = false
 var frame = 0
@@ -646,12 +704,19 @@ startNewTrack()
 
 
 function startNewGame() {
-	let seed = cyrb128(seedInput.value)
-	rnd = mulberry32(seed[0])
+	curSeed = seedInput.value
+	rnd = mulberry32(cyrb128(curSeed)[0])
 	seedInput.blur()
 	seedSelect.blur()
 	window.scrollTo(0, 0)
 	
+	if (!finished) { 
+		traces = []
+		lastScores = []
+		avScoreElement.innerHTML = ""
+	}
+	
+	finished = false
 	player = new Player(0, 0)
 	trace = []
 	path = GeneratePath(segmentLength, maxTurnAngle)
@@ -662,11 +727,15 @@ function startNewGame() {
 	tailCrossed = false
 	gameOver = false
 	pause = false
+	scoreElement.style.color = "black"
+	avScoreElement.style.color = "black"
 }
 
 function startNewTrack() {
 	curTrackBestScore = 999999
 	prevTrace = []
+	traces = []
+	lastScores = []
 	RemoveImages()
 	addThumbnailsDiv()
 	
@@ -675,7 +744,34 @@ function startNewTrack() {
 
 
 function endGame() {
+	finished = true
+	traces.push(trace)
+	lastScores.push(score)
+	if (lastScores.length > averageGames) {
+		lastScores.shift()
+		traces.shift()
+	}
+	
+	if (!scores[curSeed] || score < scores[curSeed]) {
+		scoreElement.style.color = "red"
+	}
+	
+	if (lastScores.length < averageGames) {
+		avScore = 0
+	} else {
+		avScore = lastScores.reduce((a, b) => a + b) / lastScores.length
+		avScore = Math.round(avScore)
+		if (!avScores[curSeed] || avScore < avScores[curSeed]) {
+			avScoreElement.style.color = "red"
+		}
+	}
+	
+	avScoreElement.innerHTML = `average of ${lastScores.join(", ")} = ${avScore}`
+	
 	saveGame()
+	
+	let sum = lastScores.slice(-(averageGames-1)).reduce((a, b) => a + b, 0);
+	neededScoreForAverage = avScores[curSeed] * averageGames - sum
 	
 	if (score <= curTrackBestScore) {
 		curTrackBestScore = score
@@ -702,6 +798,7 @@ function update() {
 	
 	if (tailCrossed) {
 		gameOver = true
+		avScoreElement.innerHTML = ""
 	}
 	
 	frame++
@@ -725,8 +822,10 @@ function draw() {
 			ctx.translate(-player.x, -player.y) // player's coordinate system
 		}
 		
+		if (!gameOver) drawAverageCircle()
 		//drawPath()
 		player.drawTrace()
+		//if (!gameOver) drawAveragePlayer()
 		drawTurns()
 		
 		ctx.translate(player.x, player.y)
