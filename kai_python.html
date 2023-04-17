@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Nano Minnow</title>
+  <title>Kai Python</title>
 	<meta charset="UTF-8">
 </head>
 
@@ -11,7 +11,8 @@
 <input type="text" id="seed" style="font-family: monospace;">
 <select name="seeds" id="seedSelect" style="font-family: monospace;"></select>
 <button type="button" id="seedRemoveButton">Remove seed</button>
-&nbsp; <a href="kai_python.html">Kai Python</a>
+<!-- <button type="button" id="clearButton">Clear all to initial state</button> -->
+&nbsp; <a href="nano_minnow.html">Nano Minnow</a>
 
 <div id="container" style="display: flex; justify-content: center;">
 <canvas id="gameCanvas" width="500" height="500" style="border:3px solid #444444;"></canvas>
@@ -49,21 +50,17 @@ globalThis.module = {};
 <script>  // ===================================================
 
 const playerRad = 5
-const turnRadius = 15
-const msPerFrame = 20 // 50 fps
-const playerSpeed = playerRad * msPerFrame * 0.02
-const turnForce = playerSpeed * 0.0007
-const rMinCircle = turnRadius * 1.8
-	const maxTurnForce = playerSpeed/rMinCircle
-//const pathLength = 20 //picked randomly in GeneratePath()
+const playerSpeed = 2.5
+const turnForce = 0.002
+//const pathLength = 7 // random now
 const averageGames = 3
+const turnRadius = 15
 const maxTurnAngle = Math.PI*2/3
 const segmentLength = 100
-const tailLength = 300
-
+const tailLength = 90
+const msPerFrame = 33 // ~30 fps
 
 // ===================================================
-
 
 var scoreElement = document.createElement('div')
 scoreContainer.appendChild(scoreElement)
@@ -88,7 +85,7 @@ ctx.imageSmoothingEnabled = true
 
 
 var backgroundImage = new Image()
-backgroundImage.src = "img/background-s.jpg"
+backgroundImage.src = "img/background-g.jpg"
 var playerImage = new Image()
 playerImage.src = "img/player.png"
 var ghostImage = new Image()
@@ -97,35 +94,36 @@ var turnImage = new Image()
 turnImage.src = "img/turn.png"
 var curTurnImage = new Image()
 curTurnImage.src = "img/curturn.png"
+var tickImage = playerImage
 
 
 // ================
 
 //localStorage.clear();
-//localStorage.removeItem("mtn7_seeds"); localStorage.removeItem("mtn7_scores");  localStorage.removeItem("mtn7_avScores"); localStorage.removeItem("mtn7_lastplayedseed");
+//localStorage.removeItem("pr2_seeds"); localStorage.removeItem("pr2_scores");  localStorage.removeItem("pr2_avScores"); localStorage.removeItem("pr2_lastplayedseed");
 
-const MAX_SEEDS = 100; 
+const MAX_SEEDS = 100;
 
-const fish = ["turbot", "smelt", "stingray", "carp", "eel", "tuna", "pike", "kaluga", "ray", "ide", "orfe", "shark", "neon", "oscar", "anchovy", "mullet", "grunter", "blowfish", "pufferfish","taimen", "dolphin", "catfish", "discus", "albacore", "perch", "karp", "barracuda", "minnow", "herring", "grouper", "snapper", "ruffe", "huchen", "zander", "carassius",  "koi", "cobia", "salmon", "cod", "sturgeon", "tetra", "lenok", "mako", "manta", "skate", "marlin", "dorado", "flounder", "guppy", "snook", "misgurnus", "rutilus", "halibut", "sole", "gourami", "danio", "clownfish", "tench", "bass", "beluga", "golfish", "gunnel", "mackerel", "whale", "gulper", "sprat", "bream", "burbot", "trout"
-]
+const rivers = [
+  "kai)", "Ganges", "Colorado", "Nile", "Amazon", "Yangtze", "Parana", "Lena", "Niger", "Paraguay", "Congo", "io", "k", "Euphrates", "Mackenzie", "Mekong", "Zambezi", "python"
+];
 
-const INITIAL_SEEDS = fish;
+const INITIAL_SEEDS = rivers;
 
 let seedInput = document.getElementById("seed");
 let seedSelect = document.getElementById("seedSelect");
 
-let seeds = JSON.parse(localStorage.getItem("mtn7_seeds")) || INITIAL_SEEDS;
-let scores = JSON.parse(localStorage.getItem("mtn7_scores")) || {};
-let avScores = JSON.parse(localStorage.getItem("mtn7_avScores")) || {};
+let seeds = JSON.parse(localStorage.getItem("pr2_seeds")) || INITIAL_SEEDS;
+let scores = JSON.parse(localStorage.getItem("pr2_scores")) || {};
+let avScores = JSON.parse(localStorage.getItem("pr2_avScores")) || {};
 
 updateSeedSelect();
 
-let savedSeed = localStorage.getItem("mtn7_lastplayedseed")
+let savedSeed = localStorage.getItem("pr2_lastplayedseed")
 if (!savedSeed) savedSeed = INITIAL_SEEDS[0]
-if (savedSeed) {
-    seedInput.value = savedSeed;
-    seedSelect.value = savedSeed;
-}
+seedInput.value = savedSeed;
+seedSelect.value = savedSeed;
+
 var seed = cyrb128(seedInput.value)
 var rnd = mulberry32(seed[0])
 
@@ -160,7 +158,7 @@ seedInput.addEventListener("change", function() {
 
 function saveGame() {
     let seed = seedInput.value;
-		localStorage.setItem("mtn7_lastplayedseed", seedInput.value);
+		localStorage.setItem("pr2_lastplayedseed", seedInput.value);
 		
     let index = seeds.indexOf(seed);
     if (index !== -1) {
@@ -170,17 +168,17 @@ function saveGame() {
     if (seeds.length > MAX_SEEDS) {
         seeds.pop();
     }
-    localStorage.setItem("mtn7_seeds", JSON.stringify(seeds));
+    localStorage.setItem("pr2_seeds", JSON.stringify(seeds));
     updateSeedSelect();
 		
     if (!scores[seed] || score < scores[seed]) {
         scores[seed] = score;
-        localStorage.setItem("mtn7_scores", JSON.stringify(scores));
+        localStorage.setItem("pr2_scores", JSON.stringify(scores));
     }
     if (!avScores[seed] || 
 		(avScore > 0 && avScore < avScores[seed])) {
         avScores[seed] = avScore;
-        localStorage.setItem("mtn7_avScores", JSON.stringify(avScores));
+        localStorage.setItem("pr2_avScores", JSON.stringify(avScores));
     }
 		
 		updateSeedSelect();
@@ -199,23 +197,41 @@ removeButton.addEventListener("click", function() {
     delete scores[seedToRemove];
     delete avScores[seedToRemove];
     // Update localStorage
-    localStorage.setItem("mtn7_seeds", JSON.stringify(seeds));
-    localStorage.setItem("mtn7_scores", JSON.stringify(scores));
-    localStorage.setItem("mtn7_avScores", JSON.stringify(avScores));
+    localStorage.setItem("pr2_seeds", JSON.stringify(seeds));
+    localStorage.setItem("pr2_scores", JSON.stringify(scores));
+    localStorage.setItem("pr2_avScores", JSON.stringify(avScores));
     // Update the seed select element
     updateSeedSelect();
   }
 });
 
+/*
+let clearButton = document.getElementById("clearButton");
+
+clearButton.addEventListener("click", function() {
+  localStorage.clear()
+	seeds = INITIAL_SEEDS
+	seedSelect.innerHTML = ""
+  updateSeedSelect()
+});*/
+
 // =============================================
 
 
 var keys = {};
+var curAction = 0
+
 document.onkeydown = document.onkeyup = function(e) {
 	if (e.target.tagName === 'INPUT') return;
 	
 	keys[e.keyCode] = e.type == 'keydown'
 	//db(e.keyCode)
+	
+	if (e.type == 'keydown' && (e.keyCode == 37)) {
+		curAction = -1
+	} else if (e.type == 'keydown' && (e.keyCode == 39)) {
+		curAction = 1
+	}
 	
 	// Pause on P
 	if (e.type == 'keydown' && (e.keyCode == 80)) {
@@ -279,7 +295,6 @@ function clamp(number, min, max) {
   return Math.max(min, Math.min(number, max));
 }
 
-
 // =================================================
 
 
@@ -310,6 +325,7 @@ function Player(x, y) {
 	this.setVelocities()
 	this.frame = 0;
 	this.iPos = 0;
+	this.lastAction = 0;
 	
 } 
 
@@ -321,12 +337,14 @@ Player.prototype.setVelocities = function() {
 const framesPerLine = 3
 
 Player.prototype.update = function() {
-	if (keys[37]) {            // left arrow
-			if (this.turnForce > -maxTurnForce) this.turnForce -= turnForce
+	if (curAction !== this.lastAction) {
+		this.saveAction(curAction, this.frame)
+		this.lastAction = curAction
 	}
-	if (keys[39]) {            // right arrow
-			if (this.turnForce < maxTurnForce) this.turnForce += turnForce
-	}
+		
+	this.turnForce += turnForce * curAction
+	this.turnForce = clamp(this.turnForce, -0.1, 0.1)
+	
 	this.orientation += this.turnForce
 	
 	this.setVelocities()
@@ -342,17 +360,22 @@ Player.prototype.update = function() {
 }
 
 
+Player.prototype.saveAction = function(action, currentFrame) {
+    actions.push({frame: currentFrame, action: action,
+									x: this.x, y: this.y, or: this.orientation});
+}
+
 
 Player.prototype.draw = function() {
 	ctx.save()
 	ctx.rotate(this.orientation - Math.PI / 2)
 	ctx.drawImage(playerImage, -this.r, -this.r*5, this.r * 2, this.r * 10)
 	ctx.restore()
-	this.drawArrows()
+	if (!gameOver) this.drawArrows()
 }
 
 Player.prototype.drawArrows = function() {
-	if (keys[37]) { // left arrow
+	if (curAction == -1) { // left arrow
     ctx.save();
     ctx.rotate(this.orientation + Math.PI / 2);
     ctx.beginPath();
@@ -364,7 +387,7 @@ Player.prototype.drawArrows = function() {
     ctx.restore();
 		}
 
-	if (keys[39]) { // right arrow
+	if (curAction == 1) { // right arrow
     ctx.save();
     ctx.rotate(this.orientation + Math.PI / 2);
     ctx.beginPath();
@@ -374,6 +397,39 @@ Player.prototype.drawArrows = function() {
     ctx.lineTo(5, -5);
     ctx.fill();
     ctx.restore();
+	}
+}
+
+Player.prototype.drawActions = function() {
+	for (a of actions) {
+		ctx.save()
+		ctx.translate(a.x, a.y)
+		
+		if (a.action == -1) { // left arrow
+			ctx.save();
+			ctx.rotate(a.or + Math.PI / 2);
+			ctx.beginPath();
+			ctx.fillStyle = 'yellow';
+			ctx.moveTo(-10, 0);
+			ctx.lineTo(-5, -5);
+			ctx.lineTo(-5, 5);
+			ctx.fill();
+			ctx.restore();
+			}
+
+		if (a.action == 1) { // right arrow
+			ctx.save();
+			ctx.rotate(a.or + Math.PI / 2);
+			ctx.beginPath();
+			ctx.fillStyle = 'yellow';
+			ctx.moveTo(10, 0);
+			ctx.lineTo(5, -5);
+			ctx.lineTo(5, 5);
+			ctx.fill();
+			ctx.restore();
+		}
+		
+		ctx.restore()
 	}
 }
 
@@ -388,7 +444,7 @@ Player.prototype.drawTrace = function() {
 	
 	// best trace from this session
 	if (prevTrace.length > 0) {
-		ctx.strokeStyle = gameOver ? '#aa6699' : '#888888'
+		ctx.strokeStyle = gameOver ? '#997799' : '#888888'
 		var i0 = clamp(trace.length - tailLength, 0, prevTrace.length-1)
 		if (gameOver) i0 = 0
 		ctx.moveTo(prevTrace[i0].x, prevTrace[i0].y)
@@ -396,6 +452,9 @@ Player.prototype.drawTrace = function() {
 			ctx.lineTo(prevTrace[i].x, prevTrace[i].y)
 		}
 		ctx.stroke()
+		
+		//if (gameOver) drawScaleOnTrace2(prevTrace)
+		
 	
 		// drawing ghost with smooth interpolation
 		ctx.save()
@@ -415,7 +474,8 @@ Player.prototype.drawTrace = function() {
 	
 	// current trace
 	ctx.beginPath()
-	ctx.strokeStyle = 'blue'
+	tailCrossed = isTailCrossed()
+	ctx.strokeStyle = tailCrossed ? 'red' : 'blue'
 	i0 = Math.max(0, trace.length - tailLength)
 	if (gameOver) i0 = 0
 	ctx.moveTo(trace[i0].x, trace[i0].y)
@@ -423,6 +483,37 @@ Player.prototype.drawTrace = function() {
 		ctx.lineTo(trace[i].x, trace[i].y)
 	}
 	ctx.stroke()
+	
+	//if (gameOver) drawScaleOnTrace2(trace)
+	
+}
+
+// not used
+function drawScaleOnTrace2(trace) { 
+	for (var i = 10; i < trace.length; i+=10) {
+		let r = i % 50 === 0 ? 6 : 3
+		ctx.drawImage(tickImage, trace[i].x-r, trace[i].y-r, r * 2, r * 2)
+	}
+}
+
+// not used
+function drawScaleOnTrace(trace) { 
+	const shortTick = 3;
+	const longTick = 7;
+
+	for (var i = 10; i < trace.length; i+=10) {
+		let tick = i % 50 === 0 ? longTick : shortTick
+		var dx = trace[i].x - trace[i - 1].x;
+		var dy = trace[i].y - trace[i - 1].y;
+		var hypot = Math.hypot(dx, dy);
+		var x1 = trace[i].x - tick * dy / hypot;
+		var y1 = trace[i].y + tick * dx / hypot;
+		var x2 = trace[i].x + tick * dy / hypot;
+		var y2 = trace[i].y - tick * dx / hypot;
+		ctx.moveTo(x1, y1);
+		ctx.lineTo(x2, y2);
+	}
+	ctx.stroke();
 }
 
 
@@ -436,7 +527,6 @@ function drawAveragePlayer(){
 	ctx.drawImage(ghostImage, t.x - r, t.y - r, r * 2, r * 2)
 	ctx.globalAlpha = 1
 }
-
 
 function averageGhost(){
 	var f = Math.floor(frame / framesPerLine) 
@@ -477,9 +567,10 @@ function drawAverageCircle() {
 
 
 
+
 function GeneratePath(segmentLength, roughness) {
-    const turns = (rnd() ** 2) * 25 + 3
-    let path = [];
+    const turns = (rnd() ** 3) * 15 + 2
+		let path = [];
     let currentX = 0;
     let currentY = -segmentLength;
     let currentAngle = -Math.PI / 2;
@@ -545,8 +636,9 @@ function drawTurns(){
 	
 	if (gameOver) {
 		for (i=0; i < path.length; i++) {
+			let im = i < curTurn ? curTurnImage : turnImage
 			r = turnRadius
-			ctx.drawImage(curTurnImage, path[i].x - r, path[i].y - r, r * 2, r * 2)
+			ctx.drawImage(im, path[i].x - r, path[i].y - r, r * 2, r * 2)
 		}
 	} else {
 		let i = curTurn-1
@@ -578,11 +670,35 @@ function isTurnCleared() {
 	return playerPath.intersects(turnPath);
 }
 
+
+function isTailCrossed() {
+	var playerPath = new Path2D();
+	playerPath.ellipse(player.x, player.y, player.r * 5, player.r, player.orientation, 0, Math.PI*2, false);
+	
+	var tracePath = new Path2D();
+	var i0 = Math.max(0, trace.length - tailLength)
+	tracePath.moveTo(trace[i0].x, trace[i0].y)
+	// length of the tightest circle is around 19
+	for (var i = i0 + 1; i < trace.length - 18; i++) {
+		tracePath.lineTo(trace[i].x, trace[i].y)
+	}
+	
+	// Intersect boolean
+	return playerPath.intersects(tracePath);
+}
+
 // ==================================================
 
 
+var player = new Player(0, 0)
+var tailCrossed = false
 var gameOver = false
+var finished = false
+var pause = false
 var showFPS = false
+var frame = 0
+let actions = []
+
 startNewTrack()
 
 
@@ -593,18 +709,21 @@ function startNewGame() {
 	seedSelect.blur()
 	window.scrollTo(0, 0)
 	
-	trace = []
-	if (!gameOver) { // previous game isn't finished
+	if (!finished) { 
 		traces = []
 		lastScores = []
 		avScoreElement.innerHTML = ""
 	}
 	
+	finished = false
 	player = new Player(0, 0)
+	trace = []
 	path = GeneratePath(segmentLength, maxTurnAngle)
 	curTurn = 0;
-
 	score = frame = 0
+	actions = []
+	curAction = 0
+	tailCrossed = false
 	gameOver = false
 	pause = false
 	scoreElement.style.color = "black"
@@ -622,7 +741,9 @@ function startNewTrack() {
 	startNewGame()
 }
 
+
 function endGame() {
+	finished = true
 	traces.push(trace)
 	lastScores.push(score)
 	if (lastScores.length > averageGames) {
@@ -652,7 +773,6 @@ function endGame() {
 	
 	let sum = lastScores.slice(-(averageGames-1)).reduce((a, b) => a + b, 0);
 	neededScoreForAverage = avScores[curSeed] * averageGames - sum
-	//db(neededScoreForAverage)
 	
 	if (score <= curTrackBestScore) {
 		curTrackBestScore = score
@@ -675,6 +795,11 @@ function update() {
 		curTurn++
 		gameOver = curTurn >= path.length
 		if (gameOver) endGame()
+	}
+	
+	if (tailCrossed) {
+		gameOver = true
+		avScoreElement.innerHTML = ""
 	}
 	
 	frame++
@@ -704,9 +829,13 @@ function draw() {
 		//if (!gameOver) drawAveragePlayer()
 		drawTurns()
 		
-		
 		ctx.translate(player.x, player.y)
     player.draw()
+		if (gameOver) {
+			ctx.translate(-player.x, -player.y)
+			player.drawActions()
+		}
+		
     ctx.restore()
 }
 
@@ -781,14 +910,7 @@ function makeFinalSnapshot() {
 				
 	dataURL = canvas.toDataURL("image/jpeg", 0.85);
 	
-	// just an image
-	/*var img = document.createElement('img');
-	img.src = dataURL;
-	img.style.display = 'block';
-	img.style.margin = '20px auto';
-	document.body.appendChild(img);*/
-	
-	var fileName = 'dr_' + seedInput.value + '_' + score + '.jpg';
+	var fileName = 'pr_' + seedInput.value + '_' + score + '.jpg';
 	
 	// image with download icon
 	var outerWrapper = document.createElement('div');
@@ -826,7 +948,6 @@ function RemoveImages() {
 			document.body.removeChild(outerWrappers[i]);
 	}
 }
-
 
 
 // Main Loop
