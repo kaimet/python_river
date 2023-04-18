@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Move the needle</title>
+</head>
+
+<body style="background-image: url('img/bg.jpg')">
+
+<div id="container" style="display: flex; justify-content: center;">
+<canvas id="gameCanvas" width="550" height="550" style="border:3px solid #444444;"></canvas>
+</div>
+
+<div id="scoreContainer" style="display: block; text-align: center;"></div>
+
+
+<script>  // ===================================================
+
+const playerRad = 5
+const playerSpeed = 1.5
+const turnForce = 0.001
+const pathLength = 2000;
+
+// ===================================================
+
+
+var scoreElement = document.createElement('div')
+scoreContainer.appendChild(scoreElement)
+scoreElement.style.fontSize = '32px'
+
+var fpsOut = document.createElement('div')
+document.body.appendChild(fpsOut)
+fpsOut.style.fontSize = '24px'
+
+var debugOut = document.createElement('div')
+document.body.appendChild(debugOut)
+debugOut.style.fontSize = '28px'
+
+var canvas = document.getElementById("gameCanvas")
+var ctx = canvas.getContext("2d")
+ctx.imageSmoothingEnabled = true
+//ctx.imageSmoothingQuality = 'high'
+
+
+var backgroundImage = new Image()
+backgroundImage.src = "img/background.jpg"
+var playerImage = new Image()
+playerImage.src = "img/player.png"
+
+//var bounceSound = new Audio('sounds/bounceball.mp3')
+
+
+// =============================================
+
+
+var keys = {};
+document.onkeydown = document.onkeyup = function(e) {
+	keys[e.keyCode] = e.type == 'keydown'
+	//db(e.keyCode)
+	
+	// Pause on P or Escape
+	if (e.type == 'keydown' && (e.keyCode == 80 || e.keyCode == 27)) {
+		pause = pause ? false : true
+	}
+	
+	// fps on `
+	if (e.keyCode == 192 && e.type == 'keydown') {
+		showFPS = !showFPS
+		if (!showFPS) fpsOut.innerHTML = ''
+	}
+};
+
+
+
+function db(v) {
+	debugOut.innerHTML = v;
+}
+
+
+var frameTime = 0, lastLoop = new Date(), thisLoop
+function countFPS() {
+	const FPSfilterStrength = 20
+	var thisFrameTime = (thisLoop = new Date()) - lastLoop
+	frameTime += (thisFrameTime - frameTime) / FPSfilterStrength
+	lastLoop = thisLoop
+}
+
+setInterval(function(){
+	if (showFPS) {
+		fpsOut.innerHTML = (1000/frameTime).toFixed(1) + " fps"
+	}
+}, 1000);
+
+
+function updateScore() {
+	scoreElement.innerHTML = 'Score: ' + score
+}
+
+
+// =================================================
+
+
+function drawBackground() {
+		//var pattern = ctx.createPattern(backgroundImage, 'repeat');
+    var startX = -player.x % backgroundImage.width - backgroundImage.width;
+    var startY = -player.y % backgroundImage.height - backgroundImage.height;
+    for (var x = startX; x < canvas.width + backgroundImage.width; x += backgroundImage.width) {
+        for (var y = startY; y < canvas.height + backgroundImage.height; y += backgroundImage.height) {
+            ctx.drawImage(backgroundImage, x, y);
+        }
+    }
+}
+
+
+// =================================================
+
+
+function Player(x, y) {
+	this.x = x
+	this.y = y
+	this.r = playerRad
+	this.orientation = -Math.PI/2
+	this.speed = playerSpeed
+	this.turnForce = 0;
+	this.vx
+	this.vy
+	this.setVelocities()
+	this.frame = 0;
+	this.iPos = 0;
+	
+} 
+
+Player.prototype.setVelocities = function() {
+	this.vx = this.speed * Math.cos(this.orientation)
+	this.vy = this.speed * Math.sin(this.orientation)
+}
+
+
+Player.prototype.update = function() {
+	if (keys[37]) {            // left arrow
+			if (this.turnForce > -0.05) this.turnForce -= turnForce
+	}
+	if (keys[39]) {            // right arrow
+			if (this.turnForce < 0.05) this.turnForce += turnForce
+	}
+	this.orientation += this.turnForce
+	
+	this.setVelocities()
+	
+	this.x += this.vx
+	this.y += this.vy
+	
+	if (this.frame++ % 5 == 0) {
+		playerPositions.push({x: this.x, y: this.y});
+		this.iPos++
+		if (playerPositions.length > 2500) {
+				playerPositions.shift();
+		}
+	}
+	
+}
+
+
+
+Player.prototype.draw = function() {
+    ctx.save();
+		ctx.rotate(this.orientation - Math.PI / 2)
+		ctx.drawImage(playerImage, -this.r, -this.r*5, this.r * 2, this.r * 10)
+		ctx.restore();
+		
+		if (keys[37]) { // left arrow
+    ctx.save();
+    ctx.rotate(this.orientation + Math.PI / 2);
+    ctx.beginPath();
+    ctx.fillStyle = 'yellow';
+    ctx.moveTo(-10, -10);
+    ctx.lineTo(-5, -15);
+    ctx.lineTo(-5, -5);
+    ctx.fill();
+    ctx.restore();
+}
+
+if (keys[39]) { // right arrow
+    ctx.save();
+    ctx.rotate(this.orientation + Math.PI / 2);
+    ctx.beginPath();
+    ctx.fillStyle = 'yellow';
+    ctx.moveTo(10, -10);
+    ctx.lineTo(5, -15);
+    ctx.lineTo(5, -5);
+    ctx.fill();
+    ctx.restore();
+}
+}
+
+
+
+Player.prototype.drawTrace = function() {
+	ctx.beginPath()
+	ctx.strokeStyle = 'blue'
+	ctx.lineWidth = 2
+	for (var i = 0; i < playerPositions.length - 1; i++) {
+		ctx.moveTo(playerPositions[i].x, playerPositions[i].y)
+		ctx.lineTo(playerPositions[i + 1].x, playerPositions[i + 1].y)
+	}
+	ctx.stroke()
+}
+
+// ==================================================
+
+
+var player = new Player(0, 0)
+var playerPositions = []
+var score = 500
+var pause = false
+var gameOver = false
+var showFPS = false
+
+
+
+let frame = 0
+function update() {
+	player.update()
+	
+	frame++
+}
+
+
+
+function draw() { 
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.save()
+    drawBackground()
+    ctx.translate(canvas.width/2, canvas.height/2)
+    player.draw()
+		ctx.translate(-player.x, -player.y) // player's coordinate system
+		
+		player.drawTrace()
+    ctx.restore()
+}
+
+
+
+// Main Loop
+setInterval(function() {
+	if (gameOver || pause) return;
+	
+	update();
+	
+	draw();
+	
+	countFPS()
+}, 20); // 50fps
+
+
+</script>
+</body>
+</html>
